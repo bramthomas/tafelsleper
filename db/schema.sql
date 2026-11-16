@@ -1,0 +1,15 @@
+CREATE DATABASE IF NOT EXISTS tafelsleper CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'tafelsleper'@'localhost' IDENTIFIED BY 'vervang-dit-wachtwoord';
+GRANT ALL PRIVILEGES ON tafelsleper.* TO 'tafelsleper'@'localhost';
+FLUSH PRIVILEGES;
+
+USE tafelsleper;
+
+CREATE TABLE IF NOT EXISTS app_state (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  data LONGTEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO app_state (id, data) VALUES (1, '{}') ON DUPLICATE KEY UPDATE id = id;

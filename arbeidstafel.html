@@ -131,6 +131,7 @@
 <div id="settingsModal" class="modal hidden">
   <div class="modal-inhoud">
     <h2>Instellingen</h2>
+    <p id="opslagStatus" class="hint"></p>
     <div class="instelling">
       <label for="regioSelect">Regio schoolvakanties</label>
       <select id="regioSelect">
@@ -161,6 +162,8 @@
 const STORAGE_KEY = 'arbeidstafel-v1';
 const VAK_CACHE_KEY = 'arbeidstafel-vakanties-v1';
 const RO_BASE = 'https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/overzicht-schoolvakanties-per-schooljaar/overzicht-schoolvakanties-';
+const API_URL = 'api.php';
+const API_TOKEN = '';
 const PLAN_COLS = [
   {key:'arbeid',     label:'Arbeid',     type:'text'},
   {key:'inleider',   label:'Inleider',   type:'text'},
@@ -223,6 +226,9 @@ const INGEBAKKEN_VAKANTIES = {
 };
 let state;
 let dragPayload = null;
+let serverOk = null;
+let syncEnabled = false;
+let serverSyncTimer = null;
 
 function esc(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -278,18 +284,21 @@ function sampleState(){
     settings: defaultSettings()
   };
 }
+function migrateState(s){
+  if(!s.options) s.options = defaultOptions();
+  if(!s.settings) s.settings = defaultSettings();
+  (s.parked || []).forEach(p => {
+    if(p.datum === undefined) p.datum = '';
+    if(p.feestdag === undefined) p.feestdag = '';
+    if(p.vakantie === undefined) p.vakantie = '';
+  });
+  return s;
+}
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-      state = JSON.parse(raw);
-      if(!state.options) state.options = defaultOptions();
-      if(!state.settings) state.settings = defaultSettings();
-      (state.parked || []).forEach(p => {
-        if(p.datum === undefined) p.datum = '';
-        if(p.feestdag === undefined) p.feestdag = '';
-        if(p.vakantie === undefined) p.vakantie = '';
-      });
+      state = migrateState(JSON.parse(raw));
       return;
     }
   }catch(e){}
@@ -298,6 +307,46 @@ function load(){
 }
 function save(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  if(syncEnabled) queueServerSync();
+}
+function queueServerSync(){
+  clearTimeout(serverSyncTimer);
+  serverSyncTimer = setTimeout(syncToServer, 600);
+}
+async function syncToServer(){
+  try{
+    const res = await fetch(API_URL + '?action=save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Api-Token': API_TOKEN},
+      body: JSON.stringify(state)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    serverOk = !!j.ok;
+  }catch(e){
+    serverOk = false;
+  }
+  updateOpslagStatus();
+}
+async function loadFromServer(){
+  try{
+    const res = await fetch(API_URL + '?action=get', {cache: 'no-store', headers: {'X-Api-Token': API_TOKEN}});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if(j.ok && j.state) return migrateState(j.state);
+  }catch(e){}
+  return null;
+}
+function updateOpslagStatus(){
+  const el = document.getElementById('opslagStatus');
+  if(!el) return;
+  if(serverOk === true){
+    el.textContent = 'Opslag: MariaDB via api.php — gesynchroniseerd om ' + new Date().toLocaleTimeString('nl-BE') + '.';
+  }else if(serverOk === false){
+    el.textContent = 'Opslag: alleen lokaal in de browser (api.php niet bereikbaar — bestand direct geopend, of server zonder PHP/MariaDB).';
+  }else{
+    el.textContent = 'Opslag: lokaal in de browser + synchronisatie naar MariaDB via api.php…';
+  }
 }
 function fmtDatum(d){
   if(!d) return '';
@@ -684,6 +733,7 @@ function renderSettings(){
   document.getElementById('chkNl').checked = !!state.settings.nlFeestdagen;
   document.getElementById('chkJoods').checked = !!state.settings.joodsFeestdagen;
   updateVakantieStatus();
+  updateOpslagStatus();
 }
 function render(){
   const planning = state.mode === 'planning';
@@ -766,6 +816,15 @@ function handleAppendDrop(payload){
 /* ---------- Init & events ---------- */
 function init(){
   load();
+  loadFromServer().then(remote => {
+    if(remote){
+      state = remote;
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+      render();
+    }
+    syncEnabled = true;
+    updateOpslagStatus();
+  });
   const tafel = document.getElementById('tafel');
   const parkTafel = document.getElementById('parkTafel');
   const parkWrap = document.getElementById('parkWrap');
