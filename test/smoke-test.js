@@ -28,12 +28,13 @@ function elStub(){
   });
 }
 const store = {};
+const elements = {};
 const sandbox = {
   console,
   crypto: require('crypto').webcrypto,
   document: {
     addEventListener(){},
-    getElementById(){ return elStub(); },
+    getElementById(id){ if(!elements[id]) elements[id] = elStub(); return elements[id]; },
     querySelector(){ return elStub(); },
     querySelectorAll(){ return []; }
   },
@@ -109,6 +110,14 @@ function check(label, got, exp){
   check('append: planning nieuwe regel', vm.runInContext('state.plan[state.slots[state.slots.length-1].id].arbeid', sandbox), 'Nieuw ding');
   check('append: uit parkeerplaats', vm.runInContext("state.parked.find(p => p.id === 'p9') === undefined", sandbox), true);
   check('append: geen bestaande rij verdrongen', vm.runInContext('state.plan.s4.arbeid', sandbox), 'Bevordering Bijker');
+
+  vm.runInContext('state.mode = "planning"; render();', sandbox);
+  const tafelHtml = elements['tafel'].innerHTML || '';
+  check('planning: verwijderknop per rij', (tafelHtml.match(/class="verwijd"/g) || []).length, 5);
+  sandbox.verwijderSlot('s2');
+  check('verwijderSlot: aantal slots', vm.runInContext('state.slots.length', sandbox), 4);
+  check('verwijderSlot: planning mee verwijderd', vm.runInContext('state.plan.s2 === undefined', sandbox), true);
+  check('verwijderSlot: andere rijen ongemoeid', vm.runInContext('state.plan.s4.arbeid', sandbox), 'Bevordering Bijker');
 
   if(failures){
     console.error(failures + ' check(s) gefaald');

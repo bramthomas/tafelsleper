@@ -27,6 +27,8 @@ In de planningsmodus:
   wisselen de twee rijen van planning.
 - zijn de kolommen **Graad, MV, Status, Voorhof en WP** dropdownmenu's. De opties beheert u
   via **⚙ Opties beheren**. De overige kolommen zijn vrije tekst.
+- heeft elke rij een **🗑 verwijderknop** (met bevestiging) waarmee u de hele regel
+  (datum + planning) verwijdert.
 
 ### 3. Parkeerplaats
 Onderaan de tabel staat de **parkeerplaats** voor uitgevallen, ongeplande of onbesloten

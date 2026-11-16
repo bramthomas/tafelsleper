@@ -609,7 +609,7 @@ function renderTable(){
   if(planning) head += '<th class="handle" title="Sleep rijen om te verplaatsen">⠿</th>';
   head += '<th>Datum</th><th>Feestdag</th><th>Vakantie</th>';
   if(planning) PLAN_COLS.forEach(c => { head += '<th>' + esc(c.label) + '</th>'; });
-  else head += '<th></th>';
+  head += '<th></th>';
   head += '</tr></thead>';
   let body = '<tbody>';
   if(planning){
@@ -621,6 +621,7 @@ function renderTable(){
       body += '<td class="vast">' + esc(s.feestdag) + '</td>';
       body += '<td class="vast">' + esc(s.vakantie) + '</td>';
       PLAN_COLS.forEach(c => { body += '<td>' + inputFor(e[c.key], c, 'data-slot', s.id) + '</td>'; });
+      body += '<td><button class="verwijd" data-slot="' + s.id + '" title="Verwijder deze regel">🗑</button></td>';
       body += '</tr>';
     });
   }else{
@@ -634,7 +635,7 @@ function renderTable(){
     });
   }
   if(!state.slots.length){
-    body += '<tr><td colspan="' + (planning ? 11 : 4) + '" class="hint">Nog geen datums. Ga naar de opzetmodus om datums, feestdagen en vakanties te definiëren.</td></tr>';
+    body += '<tr><td colspan="' + (planning ? 12 : 4) + '" class="hint">Nog geen datums. Ga naar de opzetmodus om datums, feestdagen en vakanties te definiëren.</td></tr>';
   }
   body += '</tbody>';
   tafel.innerHTML = head + body;
@@ -736,6 +737,12 @@ function readPayload(e){
     if(raw) return JSON.parse(raw);
   }catch(err){}
   return dragPayload;
+}
+function verwijderSlot(id){
+  state.slots = state.slots.filter(s => s.id !== id);
+  delete state.plan[id];
+  save();
+  render();
 }
 function handleAppendDrop(payload){
   const idx = state.parked.findIndex(p => p.id === payload.id);
@@ -890,10 +897,8 @@ function init(){
   tafel.addEventListener('click', e => {
     const btn = e.target.closest('button.verwijd[data-slot]');
     if(!btn) return;
-    const id = btn.dataset.slot;
-    state.slots = state.slots.filter(s => s.id !== id);
-    delete state.plan[id];
-    save(); render();
+    if(!confirm('Deze regel (datum + planning) verwijderen?')) return;
+    verwijderSlot(btn.dataset.slot);
   });
 
   tafel.addEventListener('dragstart', e => {
