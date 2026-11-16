@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbeidstafel</title>
+<style>
+  :root{
+    --rand:#c9d2dc; --tekst:#1d2733; --zacht:#5b6b7c; --accent:#1f6feb;
+    --achtergrond:#f4f6f9; --kaart:#ffffff; --parkeer:#fdf6e3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:1.2rem; background:var(--achtergrond); color:var(--tekst);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;
+  }
+  header h1{margin:0 0 .6rem; font-size:1.4rem;}
+  .werkbalk{display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:.4rem;}
+  button{
+    font:inherit; padding:.4rem .8rem; border:1px solid var(--rand); border-radius:6px;
+    background:var(--kaart); color:var(--tekst); cursor:pointer;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent);}
+  button.primair{background:var(--accent); border-color:var(--accent); color:#fff;}
+  button.primair:hover{filter:brightness(1.1); color:#fff;}
+  .hint{color:var(--zacht); margin:.2rem 0 .8rem;}
+  .tabelwrap{overflow-x:auto; background:var(--kaart); border:1px solid var(--rand); border-radius:8px;}
+  table{border-collapse:collapse; width:100%; min-width:900px;}
+  th,td{border:1px solid var(--rand); padding:.35rem .5rem; text-align:left; vertical-align:middle;}
+  thead th{background:#eef2f7; position:sticky; top:0; white-space:nowrap;}
+  tbody tr{background:var(--kaart);}
+  tbody tr.dragging{opacity:.45;}
+  tbody tr.drop-over{outline:3px solid var(--accent); outline-offset:-3px;}
+  td.handle{cursor:grab; text-align:center; color:var(--zacht); width:1.6rem; user-select:none;}
+  tr[draggable="true"]{cursor:grab;}
+  td.datum{white-space:nowrap; font-weight:600;}
+  td.vast{background:#f8fafc; color:var(--zacht);}
+  td input[type="text"], td select, td input[type="date"]{
+    font:inherit; width:100%; min-width:6rem; border:1px solid transparent; border-radius:4px;
+    padding:.25rem .35rem; background:transparent; color:var(--tekst);
+  }
+  td select{min-width:7rem;}
+  td input[type="date"]{min-width:9rem;}
+  td input:hover, td select:hover{border-color:var(--rand);}
+  td input:focus, td select:focus{outline:2px solid var(--accent); border-color:var(--accent); background:#fff;}
+  button.verwijd{border:none; background:transparent; color:#b00020; padding:.1rem .35rem; font-size:1rem;}
+  button.verwijd:hover{background:#fdecec; border:none; color:#b00020;}
+  #parkeerplaats{
+    margin-top:1.4rem; border:2px dashed #d9b64a; border-radius:8px; padding:.8rem 1rem;
+    background:var(--parkeer);
+  }
+  #parkeerplaats h2{margin:.1rem 0 .3rem; font-size:1.1rem;}
+  #parkeerplaats .sub{font-weight:400; font-size:.85rem; color:var(--zacht);}
+  #parkWrap.drop-over{outline:3px solid var(--accent); outline-offset:-3px;}
+  .modal{
+    position:fixed; inset:0; background:rgba(20,30,45,.45);
+    display:flex; align-items:flex-start; justify-content:center; padding:3rem 1rem; z-index:10;
+  }
+  .modal.hidden{display:none;}
+  .modal-inhoud{
+    background:var(--kaart); border-radius:10px; padding:1.2rem 1.4rem; max-width:640px; width:100%;
+    max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  .modal-inhoud h2{margin-top:0;}
+  fieldset{border:1px solid var(--rand); border-radius:8px; margin:0 0 .9rem; padding:.6rem .8rem .8rem;}
+  legend{font-weight:600; padding:0 .3rem;}
+  .chips{display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.5rem;}
+  .chip{
+    display:inline-flex; align-items:center; gap:.3rem; background:#eef2f7;
+    border:1px solid var(--rand); border-radius:999px; padding:.15rem .3rem .15rem .6rem;
+  }
+  .chip button{border:none; background:transparent; color:#b00020; padding:0 .25rem; border-radius:50%;}
+  .chip button:hover{background:#fdecec;}
+  form.voegtoe{display:flex; gap:.4rem;}
+  form.voegtoe input{
+    font:inherit; flex:1; border:1px solid var(--rand); border-radius:6px; padding:.35rem .5rem;
+  }
+  .verborgen{display:none;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Arbeidstafel</h1>
+  <div class="werkbalk">
+    <button id="modeBtn" class="primair"></button>
+    <button id="addSlotBtn" class="opzet-only verborgen">➕ Datum toevoegen</button>
+    <button id="sortBtn" class="opzet-only verborgen">⬍ Sorteer op datum</button>
+    <button id="optionsBtn">⚙ Opties beheren</button>
+    <button id="sampleBtn">Voorbeelddata laden</button>
+  </div>
+  <p id="hint" class="hint"></p>
+</header>
+<main>
+  <div class="tabelwrap">
+    <table id="tafel"></table>
+  </div>
+  <section id="parkeerplaats">
+    <h2>Parkeerplaats <span class="sub">— uitgevallen, ongeplande of onbesloten evenementen</span></h2>
+    <p class="hint">Sleep een rij uit de tafel hierheen om ze te parkeren. Sleep een geparkeerde rij terug op een datum om ze in te plannen.</p>
+    <div class="tabelwrap" id="parkWrap">
+      <table id="parkTafel"></table>
+    </div>
+  </section>
+</main>
+<div id="optionsModal" class="modal hidden">
+  <div class="modal-inhoud">
+    <h2>Dropdown-opties beheren</h2>
+    <p class="hint">Beheer hier de lijsten waaruit u in de kolommen Graad, MV, Status, Voorhof en WP kunt kiezen.</p>
+    <div id="optionsLijsten"></div>
+    <button id="sluitOptions">Sluiten</button>
+  </div>
+</div>
+<script>
+'use strict';
+const STORAGE_KEY = 'arbeidstafel-v1';
+const PLAN_COLS = [
+  {key:'arbeid',     label:'Arbeid',     type:'text'},
+  {key:'inleider',   label:'Inleider',   type:'text'},
+  {key:'graad',      label:'Graad',      type:'select'},
+  {key:'mv',         label:'MV',         type:'select'},
+  {key:'status',     label:'Status',     type:'select'},
+  {key:'opmerkingen',label:'Opmerkingen',type:'text'},
+  {key:'voorhof',    label:'Voorhof',    type:'select'},
+  {key:'wp',         label:'WP',         type:'select'}
+];
+const SELECT_FIELDS = ['graad','mv','status','voorhof','wp'];
+let state;
+let dragPayload = null;
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function uid(){
+  return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+}
+function emptyEntry(){
+  const o = {};
+  PLAN_COLS.forEach(c => { o[c.key] = ''; });
+  return o;
+}
+function isEmptyEntry(e){
+  return Object.values(e).every(v => !v);
+}
+function emptySlot(datum){
+  return {id: uid(), datum: datum || '', feestdag: '', vakantie: ''};
+}
+function defaultOptions(){
+  return {
+    graad:  ['1','2','3','1/2/3'],
+    mv:     ['Geen','Ja'],
+    status: ['Bevestigd','Voorlopig','Onbeslist'],
+    voorhof:['Gereserveerd','Niet nodig'],
+    wp:     ['Gereserveerd','Niet nodig']
+  };
+}
+function sampleState(){
+  const s1 = {id:'s1', datum:'2026-01-04', feestdag:'',            vakantie:'Kerstvakantie'};
+  const s2 = {id:'s2', datum:'2026-01-11', feestdag:'',            vakantie:''};
+  const s3 = {id:'s3', datum:'2026-01-18', feestdag:'',            vakantie:''};
+  const s4 = {id:'s4', datum:'2026-01-25', feestdag:'',            vakantie:''};
+  return {
+    mode: 'planning',
+    slots: [s1,s2,s3,s4],
+    plan: {
+      s1: emptyEntry(),
+      s2: Object.assign(emptyEntry(), {arbeid:'Leerlingbouwstuk', inleider:'Bijker', graad:'1', mv:'Geen', status:'Bevestigd', voorhof:'Gereserveerd'}),
+      s3: Object.assign(emptyEntry(), {arbeid:'Drieinstructieavond', graad:'1/2/3', mv:'Geen', status:'Bevestigd', opmerkingen:'Bill Meyerkamer extra gereserveerd', voorhof:'Gereserveerd', wp:'Gereserveerd'}),
+      s4: Object.assign(emptyEntry(), {arbeid:'Bevordering Bijker', graad:'2', mv:'Geen', status:'Bevestigd', voorhof:'Gereserveerd', wp:'Gereserveerd'})
+    },
+    parked: [],
+    options: defaultOptions()
+  };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      state = JSON.parse(raw);
+      if(!state.options) state.options = defaultOptions();
+      return;
+    }
+  }catch(e){}
+  state = sampleState();
+  save();
+}
+function save(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function fmtDatum(d){
+  if(!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  if(isNaN(dt.getTime())) return d;
+  return dt.toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'long'});
+}
+function inputFor(value, col, ownerAttr, ownerId){
+  if(col.type === 'select'){
+    const opts = state.options[col.key] || [];
+    let html = '<select ' + ownerAttr + '="' + ownerId + '" data-field="' + col.key + '">';
+    html += '<option value="">—</option>';
+    opts.forEach(o => {
+      html += '<option value="' + esc(o) + '"' + (o === value ? ' selected' : '') + '>' + esc(o) + '</option>';
+    });
+    if(value && opts.indexOf(value) === -1){
+      html += '<option value="' + esc(value) + '" selected>' + esc(value) + ' (oude optie)</option>';
+    }
+    html += '</select>';
+    return html;
+  }
+  return '<input type="text" ' + ownerAttr + '="' + ownerId + '" data-field="' + col.key + '" value="' + esc(value) + '">';
+}
+function renderTable(){
+  const planning = state.mode === 'planning';
+  const tafel = document.getElementById('tafel');
+  let head = '<thead><tr>';
+  if(planning) head += '<th class="handle" title="Sleep rijen om te verplaatsen">⠿</th>';
+  head += '<th>Datum</th><th>Feestdag</th><th>Vakantie</th>';
+  if(planning) PLAN_COLS.forEach(c => { head += '<th>' + esc(c.label) + '</th>'; });
+  else head += '<th></th>';
+  head += '</tr></thead>';
+  let body = '<tbody>';
+  if(planning){
+    state.slots.forEach(s => {
+      const e = state.plan[s.id] || emptyEntry();
+      body += '<tr draggable="true" data-slot="' + s.id + '">';
+      body += '<td class="handle" title="Sleep naar een andere datum">⠿</td>';
+      body += '<td class="datum">' + esc(fmtDatum(s.datum)) + '</td>';
+      body += '<td class="vast">' + esc(s.feestdag) + '</td>';
+      body += '<td class="vast">' + esc(s.vakantie) + '</td>';
+      PLAN_COLS.forEach(c => { body += '<td>' + inputFor(e[c.key], c, 'data-slot', s.id) + '</td>'; });
+      body += '</tr>';
+    });
+  }else{
+    state.slots.forEach(s => {
+      body += '<tr data-slot="' + s.id + '">';
+      body += '<td class="datum"><input type="date" data-slot="' + s.id + '" data-opzet="datum" value="' + esc(s.datum) + '"></td>';
+      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="feestdag" value="' + esc(s.feestdag) + '" placeholder="Feestdag"></td>';
+      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="vakantie" value="' + esc(s.vakantie) + '" placeholder="Vakantie"></td>';
+      body += '<td><button class="verwijd" data-slot="' + s.id + '" title="Verwijder deze datum">🗑</button></td>';
+      body += '</tr>';
+    });
+  }
+  if(!state.slots.length){
+    body += '<tr><td colspan="' + (planning ? 11 : 4) + '" class="hint">Nog geen datums. Ga naar de opzetmodus om datums, feestdagen en vakanties te definiëren.</td></tr>';
+  }
+  body += '</tbody>';
+  tafel.innerHTML = head + body;
+}
+function renderParked(){
+  const parkTafel = document.getElementById('parkTafel');
+  let head = '<thead><tr><th class="handle">⠿</th>';
+  PLAN_COLS.forEach(c => { head += '<th>' + esc(c.label) + '</th>'; });
+  head += '<th></th></tr></thead>';
+  let body = '<tbody>';
+  state.parked.forEach(p => {
+    body += '<tr draggable="true" data-parked="' + p.id + '">';
+    body += '<td class="handle" title="Sleep terug op een datum om in te plannen">⠿</td>';
+    PLAN_COLS.forEach(c => { body += '<td>' + inputFor(p[c.key], c, 'data-parked', p.id) + '</td>'; });
+    body += '<td><button class="verwijd" data-parked="' + p.id + '" title="Definitief verwijderen">🗑</button></td>';
+    body += '</tr>';
+  });
+  if(!state.parked.length){
+    body += '<tr><td colspan="10" class="hint">Leeg — sleep hier rijen naartoe die (nog) niet doorgaan.</td></tr>';
+  }
+  body += '</tbody>';
+  parkTafel.innerHTML = head + body;
+}
+function renderOptions(){
+  const wrap = document.getElementById('optionsLijsten');
+  let html = '';
+  SELECT_FIELDS.forEach(f => {
+    const label = (PLAN_COLS.find(c => c.key === f) || {}).label || f;
+    const opts = state.options[f] || [];
+    html += '<fieldset><legend>' + esc(label) + '</legend><div class="chips">';
+    if(!opts.length) html += '<span class="hint">Nog geen opties.</span>';
+    opts.forEach(o => {
+      html += '<span class="chip">' + esc(o) + ' <button type="button" data-del-opt="' + esc(f) + '" data-opt="' + esc(o) + '" title="Verwijder">✕</button></span>';
+    });
+    html += '</div><form class="voegtoe" data-add-form="' + esc(f) + '">';
+    html += '<input name="opt" placeholder="Nieuwe optie voor ' + esc(label) + '…" autocomplete="off">';
+    html += '<button type="submit">Toevoegen</button></form></fieldset>';
+  });
+  wrap.innerHTML = html;
+}
+function render(){
+  const planning = state.mode === 'planning';
+  document.getElementById('modeBtn').textContent = planning
+    ? '🛠 Opzetmodus: datums definiëren'
+    : '📋 Terug naar planning';
+  document.getElementById('hint').textContent = planning
+    ? 'Sleep een rij (⠿) naar een andere datum om de planning te verplaatsen; Datum, Feestdag en Vakantie blijven staan. Sleep een rij naar de parkeerplaats onderaan om ze daar neer te zetten.'
+    : 'Definieer hier eerst de lege tabel: voeg datums toe en vul feestdag en vakantie in. Daarna schakelt u terug naar de planning om te puzzelen.';
+  document.querySelectorAll('.opzet-only').forEach(b => b.classList.toggle('verborgen', planning));
+  renderTable();
+  renderParked();
+}
+function handleDropOnSlot(payload, targetSlot){
+  if(payload.kind === 'slot'){
+    if(payload.id === targetSlot) return;
+    const a = state.plan[payload.id] || emptyEntry();
+    const b = state.plan[targetSlot] || emptyEntry();
+    state.plan[payload.id] = b;
+    state.plan[targetSlot] = a;
+  }else if(payload.kind === 'parked'){
+    const idx = state.parked.findIndex(p => p.id === payload.id);
+    if(idx === -1) return;
+    const moving = state.parked.splice(idx, 1)[0];
+    const current = state.plan[targetSlot] || emptyEntry();
+    state.plan[targetSlot] = Object.assign(emptyEntry(), moving);
+    delete state.plan[targetSlot].id;
+    if(!isEmptyEntry(current)){
+      const back = Object.assign(emptyEntry(), current);
+      back.id = uid();
+      state.parked.push(back);
+    }
+  }
+  save();
+  render();
+}
+function readPayload(e){
+  try{
+    const raw = e.dataTransfer.getData('text/plain');
+    if(raw) return JSON.parse(raw);
+  }catch(err){}
+  return dragPayload;
+}
+function init(){
+  load();
+  const tafel = document.getElementById('tafel');
+  const parkTafel = document.getElementById('parkTafel');
+  const parkWrap = document.getElementById('parkWrap');
+
+  document.getElementById('modeBtn').addEventListener('click', () => {
+    state.mode = state.mode === 'planning' ? 'opzet' : 'planning';
+    save(); render();
+  });
+  document.getElementById('addSlotBtn').addEventListener('click', () => {
+    const nu = new Date();
+    const iso = nu.getFullYear() + '-' + String(nu.getMonth() + 1).padStart(2, '0') + '-' + String(nu.getDate()).padStart(2, '0');
+    state.slots.push(emptySlot(iso));
+    save(); render();
+  });
+  document.getElementById('sortBtn').addEventListener('click', () => {
+    state.slots.sort((a,b) => String(a.datum).localeCompare(String(b.datum)));
+    save(); render();
+  });
+  document.getElementById('sampleBtn').addEventListener('click', () => {
+    if(confirm('Huidige tafel vervangen door de voorbeelddata?')){
+      state = sampleState();
+      save(); render();
+    }
+  });
+  document.getElementById('optionsBtn').addEventListener('click', () => {
+    renderOptions();
+    document.getElementById('optionsModal').classList.remove('hidden');
+  });
+  document.getElementById('sluitOptions').addEventListener('click', () => {
+    document.getElementById('optionsModal').classList.add('hidden');
+  });
+  document.getElementById('optionsModal').addEventListener('click', e => {
+    if(e.target.id === 'optionsModal') e.target.classList.add('hidden');
+  });
+  document.getElementById('optionsLijsten').addEventListener('click', e => {
+    const btn = e.target.closest('[data-del-opt]');
+    if(!btn) return;
+    const f = btn.dataset.delOpt, o = btn.dataset.opt;
+    state.options[f] = (state.options[f] || []).filter(x => x !== o);
+    save(); renderOptions(); renderTable(); renderParked();
+  });
+  document.getElementById('optionsLijsten').addEventListener('submit', e => {
+    const form = e.target.closest('[data-add-form]');
+    if(!form) return;
+    e.preventDefault();
+    const f = form.dataset.addForm;
+    const inp = form.querySelector('input[name="opt"]');
+    const val = inp.value.trim();
+    if(val && !(state.options[f] || []).includes(val)){
+      state.options[f] = state.options[f] || [];
+      state.options[f].push(val);
+      save();
+    }
+    renderOptions(); renderTable(); renderParked();
+    const again = document.querySelector('form[data-add-form="' + f + '"] input[name="opt"]');
+    if(again) again.focus();
+  });
+
+  tafel.addEventListener('input', e => {
+    const el = e.target;
+    const slot = el.dataset.slot;
+    if(!slot) return;
+    if(el.dataset.opzet){
+      const s = state.slots.find(x => x.id === slot);
+      if(s){ s[el.dataset.opzet] = el.value; save(); }
+    }else if(el.dataset.field){
+      const entry = state.plan[slot] || (state.plan[slot] = emptyEntry());
+      entry[el.dataset.field] = el.value;
+      save();
+    }
+  });
+  tafel.addEventListener('click', e => {
+    const btn = e.target.closest('button.verwijd[data-slot]');
+    if(!btn) return;
+    const id = btn.dataset.slot;
+    state.slots = state.slots.filter(s => s.id !== id);
+    delete state.plan[id];
+    save(); render();
+  });
+
+  tafel.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr[data-slot]');
+    if(!tr || state.mode !== 'planning'){ e.preventDefault(); return; }
+    dragPayload = {kind:'slot', id: tr.dataset.slot};
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+    e.dataTransfer.effectAllowed = 'move';
+    tr.classList.add('dragging');
+  });
+  tafel.addEventListener('dragover', e => {
+    const tr = e.target.closest('tr[data-slot]');
+    if(tr && state.mode === 'planning'){
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      tr.classList.add('drop-over');
+    }
+  });
+  tafel.addEventListener('dragleave', e => {
+    const tr = e.target.closest('tr[data-slot]');
+    if(tr) tr.classList.remove('drop-over');
+  });
+  tafel.addEventListener('drop', e => {
+    const tr = e.target.closest('tr[data-slot]');
+    if(!tr || state.mode !== 'planning') return;
+    e.preventDefault();
+    tr.classList.remove('drop-over');
+    const payload = readPayload(e);
+    if(payload) handleDropOnSlot(payload, tr.dataset.slot);
+  });
+  tafel.addEventListener('dragend', e => {
+    const tr = e.target.closest('tr');
+    if(tr) tr.classList.remove('dragging');
+    document.querySelectorAll('.drop-over').forEach(x => x.classList.remove('drop-over'));
+    dragPayload = null;
+  });
+
+  parkTafel.addEventListener('input', e => {
+    const el = e.target;
+    const id = el.dataset.parked;
+    if(!id || !el.dataset.field) return;
+    const p = state.parked.find(x => x.id === id);
+    if(p){ p[el.dataset.field] = el.value; save(); }
+  });
+  parkTafel.addEventListener('click', e => {
+    const btn = e.target.closest('button.verwijd[data-parked]');
+    if(!btn) return;
+    state.parked = state.parked.filter(p => p.id !== btn.dataset.parked);
+    save(); renderParked();
+  });
+  parkTafel.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr[data-parked]');
+    if(!tr) return;
+    dragPayload = {kind:'parked', id: tr.dataset.parked};
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+    e.dataTransfer.effectAllowed = 'move';
+    tr.classList.add('dragging');
+  });
+  parkTafel.addEventListener('dragend', e => {
+    const tr = e.target.closest('tr');
+    if(tr) tr.classList.remove('dragging');
+    parkWrap.classList.remove('drop-over');
+    document.querySelectorAll('.drop-over').forEach(x => x.classList.remove('drop-over'));
+    dragPayload = null;
+  });
+  parkWrap.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    parkWrap.classList.add('drop-over');
+  });
+  parkWrap.addEventListener('dragleave', () => parkWrap.classList.remove('drop-over'));
+  parkWrap.addEventListener('drop', e => {
+    e.preventDefault();
+    parkWrap.classList.remove('drop-over');
+    const payload = readPayload(e);
+    if(!payload) return;
+    if(payload.kind === 'slot'){
+      const entry = state.plan[payload.id];
+      if(entry && !isEmptyEntry(entry)){
+        const parked = Object.assign(emptyEntry(), entry);
+        parked.id = uid();
+        state.parked.push(parked);
+        state.plan[payload.id] = emptyEntry();
+        save(); render();
+      }
+    }
+  });
+
+  render();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
