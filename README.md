@@ -27,6 +27,8 @@ In de planningsmodus:
   wisselen de twee rijen van planning.
 - zijn de kolommen **Graad, MV, Status, Voorhof en WP** dropdownmenu's. De opties beheert u
   via **⚙ Opties beheren**. De overige kolommen zijn vrije tekst.
+- heeft elke rij een **🗑 verwijderknop** (met bevestiging) waarmee u de hele regel
+  (datum + planning) verwijdert.
 
 ### 3. Parkeerplaats
 Onderaan de tabel staat de **parkeerplaats** voor uitgevallen, ongeplande of onbesloten
@@ -36,6 +38,10 @@ Sleep een rij uit de tafel naar dit vak om ze te parkeren; sleep een geparkeerde
 een datum om ze in te plannen (heeft de geparkeerde rij dezelfde datum, dan worden Feestdag
 en Vakantie meegenomen; een eventuele bestaande planning op die datum verhuist naar de
 parkeerplaats). Met 🗑 verwijdert u een geparkeerde rij definitief.
+
+Sleep een geparkeerde rij naar de **stippelzone onderaan de tafel** (⬇) om ze daar als
+**nieuwe regel onderaan toe te voegen** — met de datum, Feestdag en Vakantie van de
+geparkeerde rij, zonder een bestaande rij te verdringen.
 
 ### 4. Automatisch opzoeken van feestdag en vakantie
 Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het systeem op:
@@ -53,6 +59,12 @@ Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het s
 
 ### 5. Voorbeelddata
 Met **Voorbeelddata laden** zet u de tafel terug naar het voorbeeld (januari 2026).
+
+## Ontwikkeling / CI
+
+- `test/smoke-test.js` checkt de JavaScript in `arbeidstafel.html` (syntax + logica:
+  kalenders, feestdagen, vakantie-parser, sleep-gedrag): `node test/smoke-test.js`
+- `.github/workflows/ci.yml` draait deze test automatisch bij elke push/PR.
 
 ## Toekomstige uitbreidingen (nog niet ingebouwd)
 

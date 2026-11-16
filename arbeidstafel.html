@@ -54,6 +54,11 @@
   #parkeerplaats h2{margin:.1rem 0 .3rem; font-size:1.1rem;}
   #parkeerplaats .sub{font-weight:400; font-size:.85rem; color:var(--zacht);}
   #parkWrap.drop-over{outline:3px solid var(--accent); outline-offset:-3px;}
+  .append-zone{
+    margin-top:.6rem; border:2px dashed var(--accent); border-radius:8px; padding:.55rem .8rem;
+    color:var(--zacht); background:var(--kaart); text-align:center;
+  }
+  .append-zone.drop-over{outline:3px solid var(--accent); outline-offset:-3px; background:#eaf2ff; color:var(--tekst);}
   .modal{
     position:fixed; inset:0; background:rgba(20,30,45,.45);
     display:flex; align-items:flex-start; justify-content:center; padding:3rem 1rem; z-index:10;
@@ -103,6 +108,7 @@
   <div class="tabelwrap">
     <table id="tafel"></table>
   </div>
+  <div id="appendZone" class="append-zone verborgen">⬇ Sleep hier een geparkeerde activiteit heen om ze onderaan de tafel als nieuwe regel toe te voegen</div>
   <section id="parkeerplaats">
     <div class="kop">
       <h2>Parkeerplaats <span class="sub">— uitgevallen, ongeplande of onbesloten evenementen</span></h2>
@@ -603,7 +609,7 @@ function renderTable(){
   if(planning) head += '<th class="handle" title="Sleep rijen om te verplaatsen">⠿</th>';
   head += '<th>Datum</th><th>Feestdag</th><th>Vakantie</th>';
   if(planning) PLAN_COLS.forEach(c => { head += '<th>' + esc(c.label) + '</th>'; });
-  else head += '<th></th>';
+  head += '<th></th>';
   head += '</tr></thead>';
   let body = '<tbody>';
   if(planning){
@@ -615,6 +621,7 @@ function renderTable(){
       body += '<td class="vast">' + esc(s.feestdag) + '</td>';
       body += '<td class="vast">' + esc(s.vakantie) + '</td>';
       PLAN_COLS.forEach(c => { body += '<td>' + inputFor(e[c.key], c, 'data-slot', s.id) + '</td>'; });
+      body += '<td><button class="verwijd" data-slot="' + s.id + '" title="Verwijder deze regel">🗑</button></td>';
       body += '</tr>';
     });
   }else{
@@ -628,7 +635,7 @@ function renderTable(){
     });
   }
   if(!state.slots.length){
-    body += '<tr><td colspan="' + (planning ? 11 : 4) + '" class="hint">Nog geen datums. Ga naar de opzetmodus om datums, feestdagen en vakanties te definiëren.</td></tr>';
+    body += '<tr><td colspan="' + (planning ? 12 : 4) + '" class="hint">Nog geen datums. Ga naar de opzetmodus om datums, feestdagen en vakanties te definiëren.</td></tr>';
   }
   body += '</tbody>';
   tafel.innerHTML = head + body;
@@ -687,6 +694,7 @@ function render(){
     ? 'Sleep een rij (⠿) naar een andere datum om de planning te verplaatsen; Datum, Feestdag en Vakantie blijven staan. Sleep een rij naar de parkeerplaats onderaan om ze daar neer te zetten.'
     : 'Definieer hier eerst de lege tabel: voeg datums toe — Feestdag en Vakantie worden automatisch opgezocht — en vul ze naar wens aan. Daarna schakelt u terug naar de planning om te puzzelen.';
   document.querySelectorAll('.opzet-only').forEach(b => b.classList.toggle('verborgen', planning));
+  document.getElementById('appendZone').classList.toggle('verborgen', !planning);
   renderTable();
   renderParked();
 }
@@ -729,6 +737,30 @@ function readPayload(e){
     if(raw) return JSON.parse(raw);
   }catch(err){}
   return dragPayload;
+}
+function verwijderSlot(id){
+  state.slots = state.slots.filter(s => s.id !== id);
+  delete state.plan[id];
+  save();
+  render();
+}
+function handleAppendDrop(payload){
+  const idx = state.parked.findIndex(p => p.id === payload.id);
+  if(idx === -1) return;
+  const moving = state.parked.splice(idx, 1)[0];
+  const nu = new Date();
+  const datum = moving.datum || iso(nu.getFullYear(), nu.getMonth() + 1, nu.getDate());
+  const slot = {id: uid(), datum: datum, feestdag: moving.feestdag || '', vakantie: moving.vakantie || ''};
+  state.slots.push(slot);
+  const entry = Object.assign(emptyEntry(), moving);
+  delete entry.id;
+  delete entry.datum;
+  delete entry.feestdag;
+  delete entry.vakantie;
+  state.plan[slot.id] = entry;
+  save();
+  render();
+  if(!slot.feestdag || !slot.vakantie) autoVulDatum({type: 'slot', id: slot.id, datum: slot.datum});
 }
 
 /* ---------- Init & events ---------- */
@@ -865,10 +897,8 @@ function init(){
   tafel.addEventListener('click', e => {
     const btn = e.target.closest('button.verwijd[data-slot]');
     if(!btn) return;
-    const id = btn.dataset.slot;
-    state.slots = state.slots.filter(s => s.id !== id);
-    delete state.plan[id];
-    save(); render();
+    if(!confirm('Deze regel (datum + planning) verwijderen?')) return;
+    verwijderSlot(btn.dataset.slot);
   });
 
   tafel.addEventListener('dragstart', e => {
@@ -948,6 +978,22 @@ function init(){
     document.querySelectorAll('.drop-over').forEach(x => x.classList.remove('drop-over'));
     dragPayload = null;
   });
+  const appendZone = document.getElementById('appendZone');
+  appendZone.addEventListener('dragover', e => {
+    if(dragPayload && dragPayload.kind === 'parked'){
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      appendZone.classList.add('drop-over');
+    }
+  });
+  appendZone.addEventListener('dragleave', () => appendZone.classList.remove('drop-over'));
+  appendZone.addEventListener('drop', e => {
+    e.preventDefault();
+    appendZone.classList.remove('drop-over');
+    const payload = readPayload(e);
+    if(payload && payload.kind === 'parked') handleAppendDrop(payload);
+  });
+
   parkWrap.addEventListener('dragover', e => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
