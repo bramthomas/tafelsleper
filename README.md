@@ -60,6 +60,26 @@ Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het s
 ### 5. Voorbeelddata
 Met **Voorbeelddata laden** zet u de tafel terug naar het voorbeeld (januari 2026).
 
+## Opslag in MariaDB (optioneel)
+
+Standaard bewaart de app alles in de browser (`localStorage`). Wilt u de tafel centraal
+opslaan in een **MariaDB**, dan draait u de bestanden op een webserver met PHP + MariaDB:
+
+1. Maak de database en tabel aan: `mysql -u root -p < db/schema.sql`
+   (past `db/schema.sql` aan als u andere databasenaam/gebruiker/wachtwoord wilt).
+2. Kopieer `config.example.php` naar `config.php` en vul de MariaDB-gegevens in
+   (`config.php` staat in `.gitignore` en wordt nooit meegecommit).
+   Zet optioneel een `API_TOKEN` (de app stuurt dan header `X-Api-Token` mee; vul dezelfde
+   waarde in bij `API_TOKEN` in `arbeidstafel.html`).
+3. Zet `arbeidstafel.html`, `api.php` en `config.php` op uw webhost (bijv. in een
+   submap naast Nextcloud) en open `arbeidstafel.html` via de webserver.
+
+De app synchroniseert dan automatisch (gedepiest, 600 ms na elke wijziging) naar MariaDB
+via `api.php` (`GET ?action=get` bij het openen, `POST ?action=save` bij wijzigingen) en
+houdt tegelijk een lokale kopie in `localStorage` als fallback. In **🛠 Instellingen** ziet u
+de opslagstatus. Werkt `api.php` niet (bijv. bestand direct geopend via `file://`), dan
+valt de app automatisch terug op alleen lokale opslag.
+
 ## Ontwikkeling / CI
 
 - `test/smoke-test.js` checkt de JavaScript in `arbeidstafel.html` (syntax + logica:

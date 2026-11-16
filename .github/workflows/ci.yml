@@ -15,5 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+      - name: PHP syntax-check
+        run: |
+          php -l api.php
+          php -l config.example.php
       - name: Test arbeidstafel.html
         run: node test/smoke-test.js

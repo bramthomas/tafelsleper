@@ -32,6 +32,8 @@ const elements = {};
 const sandbox = {
   console,
   crypto: require('crypto').webcrypto,
+  setTimeout,
+  clearTimeout,
   document: {
     addEventListener(){},
     getElementById(id){ if(!elements[id]) elements[id] = elStub(); return elements[id]; },
@@ -118,6 +120,25 @@ function check(label, got, exp){
   check('verwijderSlot: aantal slots', vm.runInContext('state.slots.length', sandbox), 4);
   check('verwijderSlot: planning mee verwijderd', vm.runInContext('state.plan.s2 === undefined', sandbox), true);
   check('verwijderSlot: andere rijen ongemoeid', vm.runInContext('state.plan.s4.arbeid', sandbox), 'Bevordering Bijker');
+
+  let savedBodies = [];
+  let mockState = null;
+  sandbox.fetch = async (url, opts) => {
+    const u = String(url);
+    if(u.indexOf('action=get') !== -1) return {ok: true, json: async () => ({ok: true, state: mockState, updated_at: '2026-11-16 10:00:00'})};
+    if(u.indexOf('action=save') !== -1){ savedBodies.push(opts && opts.body); mockState = JSON.parse(opts.body); return {ok: true, json: async () => ({ok: true})}; }
+    throw new Error('offline');
+  };
+  vm.runInContext('syncEnabled = true;', sandbox);
+  sandbox.save();
+  await new Promise(r => setTimeout(r, 800));
+  check('sync: 1x POST naar api.php (gedebounced)', savedBodies.length, 1);
+  check('sync: body bevat state', JSON.parse(savedBodies[0] || '{}').mode, 'planning');
+  check('sync: serverOk true', vm.runInContext('serverOk', sandbox), true);
+  mockState = {mode: 'opzet', slots: [], plan: {}, parked: [{id: 'x', datum: '2026-01-01'}], options: {}, settings: {regio: 'zuid', nlFeestdagen: true, joodsFeestdagen: true}};
+  const remote = await sandbox.loadFromServer();
+  check('loadFromServer: remote state', remote && remote.settings && remote.settings.regio, 'zuid');
+  check('loadFromServer: migratie (feestdag aangevuld)', remote && remote.parked[0].feestdag, '');
 
   if(failures){
     console.error(failures + ' check(s) gefaald');
