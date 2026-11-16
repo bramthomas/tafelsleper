@@ -54,6 +54,12 @@ Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het s
 ### 5. Voorbeelddata
 Met **Voorbeelddata laden** zet u de tafel terug naar het voorbeeld (januari 2026).
 
+## Ontwikkeling / CI
+
+- `test/smoke-test.js` checkt de JavaScript in `arbeidstafel.html` (syntax + logica:
+  kalenders, feestdagen, vakantie-parser, sleep-gedrag): `node test/smoke-test.js`
+- `.github/workflows/ci.yml` draait deze test automatisch bij elke push/PR.
+
 ## Toekomstige uitbreidingen (nog niet ingebouwd)
 
 - Export naar Excel (twee versies).
