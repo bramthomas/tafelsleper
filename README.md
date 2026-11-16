@@ -1,6 +1,6 @@
 # Arbeidstafel
 
-Een losstaand Hulpmiddel (één HTML-bestand, geen server of internetverbinding nodig) om de
+Een losstaand hulpmiddel (één HTML-bestand, geen server of internetverbinding nodig) om de
 arbeidstafel op te stellen en aan te passen.
 
 Open `arbeidstafel.html` in een browser. Alles wordt automatisch opgeslagen in de browser
@@ -12,7 +12,8 @@ Open `arbeidstafel.html` in een browser. Alles wordt automatisch opgeslagen in d
 Klik bovenaan op **🛠 Opzetmodus: datums definiëren**. In deze modus:
 
 - voegt u met **➕ Datum toevoegen** nieuwe datumregels toe;
-- vult u per datum **Feestdag** en **Vakantie** in (Datum is een echte datumnotatie);
+- vult u per datum **Feestdag** en **Vakantie** in — bij het invoeren of wijzigen van een datum
+  worden deze **automatisch opgezocht** en ingevuld (zie onder "Automatisch opzoeken");
 - kunt u datums sorteren (**⬍ Sorteer op datum**) of verwijderen (🗑).
 
 Klik daarna op **📋 Terug naar planning** om te gaan puzzelen.
@@ -25,16 +26,32 @@ In de planningsmodus:
   MV, Status, Opmerkingen, Voorhof, WP) schuift mee. Staat er al iets op de doeldatum, dan
   wisselen de twee rijen van planning.
 - zijn de kolommen **Graad, MV, Status, Voorhof en WP** dropdownmenu's. De opties beheert u
-  via **⚙ Opties beheren** (toevoegen/verwijderen van opties voor elke lijst). De overige
-  kolommen zijn vrije tekst.
+  via **⚙ Opties beheren**. De overige kolommen zijn vrije tekst.
 
 ### 3. Parkeerplaats
 Onderaan de tabel staat de **parkeerplaats** voor uitgevallen, ongeplande of onbesloten
-evenementen. Sleep een rij uit de tafel naar dit vak om ze te parkeren; sleep een geparkeerde
-rij terug op een datum om ze in te plannen (een eventuele bestaande planning op die datum
-verhuist dan mee naar de parkeerplaats). Met 🗑 verwijdert u een geparkeerde rij definitief.
+evenementen. Met **➕ Nieuwe regel** voegt u makkelijk een nieuwe regel toe; zodra u een
+**datum** invoert of aanpast, worden **Feestdag** en **Vakantie automatisch opgezocht**.
+Sleep een rij uit de tafel naar dit vak om ze te parkeren; sleep een geparkeerde rij terug op
+een datum om ze in te plannen (heeft de geparkeerde rij dezelfde datum, dan worden Feestdag
+en Vakantie meegenomen; een eventuele bestaande planning op die datum verhuist naar de
+parkeerplaats). Met 🗑 verwijdert u een geparkeerde rij definitief.
 
-### 4. Voorbeelddata
+### 4. Automatisch opzoeken van feestdag en vakantie
+Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het systeem op:
+
+- **Feestdag**: Nederlandse feestdagen (Nieuwjaar, Goede Vrijdag, Pasen, Koningsdag,
+  Bevrijdingsdag, Hemelvaart, Pinksteren, Kerst — berekend incl. paasdata) én Joodse
+  feestdagen (Rosh Hasjana, Jom Kipoer, Soekot, Pesach, Sjav'oeot, Poerim, Chanoeka, … —
+  berekend via de Hebreeuwse kalender). Beide soorten kunnen aan/uit in de instellingen.
+- **Vakantie**: de schoolvakanties worden **live opgehaald van de website van het ministerie
+  van OCW (rijksoverheid.nl)**, per schooljaar en per regio, en lokaal gecachet. In
+  **🛠 Instellingen** kiest u de regio (**standaard Regio Midden**: Noord/Midden/Zuid) en kunt
+  u de vakanties handmatig verversen (**Nu ophalen van rijksoverheid.nl**). Werkt live ophalen
+  niet (bijvoorbeeld bij openen als los bestand zonder server, door CORS, of offline), dan
+  gebruikt de app een ingebouwde kopie van de huidige schooljaren.
+
+### 5. Voorbeelddata
 Met **Voorbeelddata laden** zet u de tafel terug naar het voorbeeld (januari 2026).
 
 ## Toekomstige uitbreidingen (nog niet ingebouwd)

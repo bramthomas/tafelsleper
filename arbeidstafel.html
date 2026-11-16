@@ -50,6 +50,7 @@
     margin-top:1.4rem; border:2px dashed #d9b64a; border-radius:8px; padding:.8rem 1rem;
     background:var(--parkeer);
   }
+  #parkeerplaats .kop{display:flex; flex-wrap:wrap; align-items:center; gap:.8rem;}
   #parkeerplaats h2{margin:.1rem 0 .3rem; font-size:1.1rem;}
   #parkeerplaats .sub{font-weight:400; font-size:.85rem; color:var(--zacht);}
   #parkWrap.drop-over{outline:3px solid var(--accent); outline-offset:-3px;}
@@ -76,6 +77,12 @@
   form.voegtoe input{
     font:inherit; flex:1; border:1px solid var(--rand); border-radius:6px; padding:.35rem .5rem;
   }
+  .instelling{display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem;}
+  .instelling label{min-width:14rem; font-weight:600;}
+  .instelling select, .instelling input[type="text"]{
+    font:inherit; border:1px solid var(--rand); border-radius:6px; padding:.3rem .5rem;
+  }
+  #vakantieStatus{color:var(--zacht); font-size:.85rem; margin:.4rem 0;}
   .verborgen{display:none;}
 </style>
 </head>
@@ -87,6 +94,7 @@
     <button id="addSlotBtn" class="opzet-only verborgen">➕ Datum toevoegen</button>
     <button id="sortBtn" class="opzet-only verborgen">⬍ Sorteer op datum</button>
     <button id="optionsBtn">⚙ Opties beheren</button>
+    <button id="settingsBtn">🛠 Instellingen</button>
     <button id="sampleBtn">Voorbeelddata laden</button>
   </div>
   <p id="hint" class="hint"></p>
@@ -96,8 +104,11 @@
     <table id="tafel"></table>
   </div>
   <section id="parkeerplaats">
-    <h2>Parkeerplaats <span class="sub">— uitgevallen, ongeplande of onbesloten evenementen</span></h2>
-    <p class="hint">Sleep een rij uit de tafel hierheen om ze te parkeren. Sleep een geparkeerde rij terug op een datum om ze in te plannen.</p>
+    <div class="kop">
+      <h2>Parkeerplaats <span class="sub">— uitgevallen, ongeplande of onbesloten evenementen</span></h2>
+      <button id="addParkedBtn">➕ Nieuwe regel</button>
+    </div>
+    <p class="hint">Voer bij een nieuwe regel een datum in: Feestdag en Vakantie worden automatisch opgezocht (rijksoverheid.nl + berekende feestdagen). Sleep een rij op een datum om ze in te plannen, of naar hier om ze te parkeren.</p>
     <div class="tabelwrap" id="parkWrap">
       <table id="parkTafel"></table>
     </div>
@@ -111,9 +122,39 @@
     <button id="sluitOptions">Sluiten</button>
   </div>
 </div>
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-inhoud">
+    <h2>Instellingen</h2>
+    <div class="instelling">
+      <label for="regioSelect">Regio schoolvakanties</label>
+      <select id="regioSelect">
+        <option value="noord">Regio Noord</option>
+        <option value="midden" selected>Regio Midden</option>
+        <option value="zuid">Regio Zuid</option>
+      </select>
+    </div>
+    <div class="instelling">
+      <label for="chkNl">Nederlandse feestdagen opzoeken</label>
+      <input type="checkbox" id="chkNl" checked>
+    </div>
+    <div class="instelling">
+      <label for="chkJoods">Joodse feestdagen opzoeken</label>
+      <input type="checkbox" id="chkJoods" checked>
+    </div>
+    <fieldset>
+      <legend>Schoolvakanties (bron: website ministerie van OCW / rijksoverheid.nl)</legend>
+      <p id="vakantieStatus" class="hint">Nog niet opgehaald.</p>
+      <button id="fetchVakantiesBtn">Nu ophalen van rijksoverheid.nl</button>
+      <p class="hint">De dagen worden live opgehaald van rijksoverheid.nl en lokaal gecachet. Bij geen internet (of geblokkeerd door de browser) gebruikt de app een ingebouwde kopie van de huidige schooljaren.</p>
+    </fieldset>
+    <button id="sluitSettings">Sluiten</button>
+  </div>
+</div>
 <script>
 'use strict';
 const STORAGE_KEY = 'arbeidstafel-v1';
+const VAK_CACHE_KEY = 'arbeidstafel-vakanties-v1';
+const RO_BASE = 'https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/overzicht-schoolvakanties-per-schooljaar/overzicht-schoolvakanties-';
 const PLAN_COLS = [
   {key:'arbeid',     label:'Arbeid',     type:'text'},
   {key:'inleider',   label:'Inleider',   type:'text'},
@@ -125,6 +166,55 @@ const PLAN_COLS = [
   {key:'wp',         label:'WP',         type:'select'}
 ];
 const SELECT_FIELDS = ['graad','mv','status','voorhof','wp'];
+const VAKANTIE_NAMEN = ['Herfstvakantie','Kerstvakantie','Voorjaarsvakantie','Meivakantie','Zomervakantie'];
+const INGEBAKKEN_VAKANTIES = {
+  '2026-2027': {
+    noord:  [
+      {name:'Herfstvakantie',    start:'2026-10-10', end:'2026-10-18'},
+      {name:'Kerstvakantie',     start:'2026-12-19', end:'2027-01-03'},
+      {name:'Voorjaarsvakantie', start:'2027-02-20', end:'2027-02-28'},
+      {name:'Meivakantie',       start:'2027-04-24', end:'2027-05-02'},
+      {name:'Zomervakantie',     start:'2027-07-10', end:'2027-08-22'}
+    ],
+    midden: [
+      {name:'Herfstvakantie',    start:'2026-10-17', end:'2026-10-25'},
+      {name:'Kerstvakantie',     start:'2026-12-19', end:'2027-01-03'},
+      {name:'Voorjaarsvakantie', start:'2027-02-20', end:'2027-02-28'},
+      {name:'Meivakantie',       start:'2027-04-24', end:'2027-05-02'},
+      {name:'Zomervakantie',     start:'2027-07-17', end:'2027-08-29'}
+    ],
+    zuid:   [
+      {name:'Herfstvakantie',    start:'2026-10-17', end:'2026-10-25'},
+      {name:'Kerstvakantie',     start:'2026-12-19', end:'2027-01-03'},
+      {name:'Voorjaarsvakantie', start:'2027-02-13', end:'2027-02-21'},
+      {name:'Meivakantie',       start:'2027-04-24', end:'2027-05-02'},
+      {name:'Zomervakantie',     start:'2027-07-24', end:'2027-09-05'}
+    ]
+  },
+  '2027-2028': {
+    noord:  [
+      {name:'Herfstvakantie',    start:'2027-10-16', end:'2027-10-24'},
+      {name:'Kerstvakantie',     start:'2027-12-25', end:'2028-01-09'},
+      {name:'Voorjaarsvakantie', start:'2028-02-19', end:'2028-02-27'},
+      {name:'Meivakantie',       start:'2028-04-29', end:'2028-05-07'},
+      {name:'Zomervakantie',     start:'2028-07-15', end:'2028-08-27'}
+    ],
+    midden: [
+      {name:'Herfstvakantie',    start:'2027-10-16', end:'2027-10-24'},
+      {name:'Kerstvakantie',     start:'2027-12-25', end:'2028-01-09'},
+      {name:'Voorjaarsvakantie', start:'2028-02-26', end:'2028-03-05'},
+      {name:'Meivakantie',       start:'2028-04-29', end:'2028-05-07'},
+      {name:'Zomervakantie',     start:'2028-07-08', end:'2028-08-20'}
+    ],
+    zuid:   [
+      {name:'Herfstvakantie',    start:'2027-10-23', end:'2027-10-31'},
+      {name:'Kerstvakantie',     start:'2027-12-25', end:'2028-01-09'},
+      {name:'Voorjaarsvakantie', start:'2028-02-26', end:'2028-03-05'},
+      {name:'Meivakantie',       start:'2028-04-29', end:'2028-05-07'},
+      {name:'Zomervakantie',     start:'2028-07-22', end:'2028-09-03'}
+    ]
+  }
+};
 let state;
 let dragPayload = null;
 
@@ -133,6 +223,9 @@ function esc(s){
 }
 function uid(){
   return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+}
+function iso(y, m, d){
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
 }
 function emptyEntry(){
   const o = {};
@@ -145,6 +238,9 @@ function isEmptyEntry(e){
 function emptySlot(datum){
   return {id: uid(), datum: datum || '', feestdag: '', vakantie: ''};
 }
+function emptyParked(){
+  return Object.assign({id: uid(), datum: '', feestdag: '', vakantie: ''}, emptyEntry());
+}
 function defaultOptions(){
   return {
     graad:  ['1','2','3','1/2/3'],
@@ -153,6 +249,9 @@ function defaultOptions(){
     voorhof:['Gereserveerd','Niet nodig'],
     wp:     ['Gereserveerd','Niet nodig']
   };
+}
+function defaultSettings(){
+  return {regio: 'midden', nlFeestdagen: true, joodsFeestdagen: true};
 }
 function sampleState(){
   const s1 = {id:'s1', datum:'2026-01-04', feestdag:'',            vakantie:'Kerstvakantie'};
@@ -169,7 +268,8 @@ function sampleState(){
       s4: Object.assign(emptyEntry(), {arbeid:'Bevordering Bijker', graad:'2', mv:'Geen', status:'Bevestigd', voorhof:'Gereserveerd', wp:'Gereserveerd'})
     },
     parked: [],
-    options: defaultOptions()
+    options: defaultOptions(),
+    settings: defaultSettings()
   };
 }
 function load(){
@@ -178,6 +278,12 @@ function load(){
     if(raw){
       state = JSON.parse(raw);
       if(!state.options) state.options = defaultOptions();
+      if(!state.settings) state.settings = defaultSettings();
+      (state.parked || []).forEach(p => {
+        if(p.datum === undefined) p.datum = '';
+        if(p.feestdag === undefined) p.feestdag = '';
+        if(p.vakantie === undefined) p.vakantie = '';
+      });
       return;
     }
   }catch(e){}
@@ -193,6 +299,287 @@ function fmtDatum(d){
   if(isNaN(dt.getTime())) return d;
   return dt.toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'long'});
 }
+
+/* ---------- Kalenderberekeningen (Gauw algorithm / Meeus) ---------- */
+const GREG_EPOCH = 1721425.5;
+const HEB_EPOCH = 347995.5;
+function mod(a, n){ return ((a % n) + n) % n; }
+function leapGregorian(y){ return (y % 4) == 0 && (!(y % 100 == 0 && y % 400 != 0)); }
+function gregorianToJd(y, m, d){
+  return (GREG_EPOCH - 1) + 365*(y-1) + Math.floor((y-1)/4) - Math.floor((y-1)/100) + Math.floor((y-1)/400)
+    + Math.floor(((367*m - 362)/12) + (m <= 2 ? 0 : (leapGregorian(y) ? -1 : -2)) + d);
+}
+function jdToGregorian(jd){
+  const wjd = Math.floor(jd - 0.5) + 0.5;
+  const depoch = wjd - GREG_EPOCH;
+  const quadricent = Math.floor(depoch/146097);
+  const dqc = mod(depoch, 146097);
+  const cent = Math.floor(dqc/36524);
+  const dcent = mod(dqc, 36524);
+  const quad = Math.floor(dcent/1461);
+  const dquad = mod(dcent, 1461);
+  const yindex = Math.floor(dquad/365);
+  let year = quadricent*400 + cent*100 + quad*4 + yindex;
+  if(!(cent == 4 || yindex == 4)) year++;
+  const yearday = wjd - gregorianToJd(year, 1, 1);
+  const leapadj = (wjd < gregorianToJd(year, 3, 1)) ? 0 : (leapGregorian(year) ? 1 : 2);
+  const month = Math.floor(((yearday + leapadj)*12 + 373)/367);
+  const day = (wjd - gregorianToJd(year, month, 1)) + 1;
+  return [year, month, day];
+}
+function hebrewLeap(y){ return mod(7*y + 1, 19) < 7; }
+function hebrewYearMonths(y){ return hebrewLeap(y) ? 13 : 12; }
+function hebrewDelay1(year){
+  const months = Math.floor((235*year - 234)/19);
+  const parts = 12084 + 13753*months;
+  let day = months*29 + Math.floor(parts/25920);
+  if(mod(3*(day+1), 7) < 3) day++;
+  return day;
+}
+function hebrewDelay2(year){
+  const last = hebrewDelay1(year-1), present = hebrewDelay1(year), next = hebrewDelay1(year+1);
+  return (next - present) == 356 ? 2 : ((present - last) == 382 ? 1 : 0);
+}
+function hebrewMonthDays(year, month){
+  if(month==2 || month==4 || month==6 || month==10 || month==13) return 29;
+  if(month==12 && !hebrewLeap(year)) return 29;
+  if(month==8 && mod(hebrewYearDays(year), 10) != 5) return 29;
+  if(month==9 && mod(hebrewYearDays(year), 10) == 3) return 29;
+  return 30;
+}
+function hebrewToJd(year, month, day){
+  const months = hebrewYearMonths(year);
+  let jd = HEB_EPOCH + hebrewDelay1(year) + hebrewDelay2(year) + day + 1;
+  if(month < 7){
+    for(let mon = 7; mon <= months; mon++) jd += hebrewMonthDays(year, mon);
+    for(let mon = 1; mon < month; mon++) jd += hebrewMonthDays(year, mon);
+  }else{
+    for(let mon = 7; mon < month; mon++) jd += hebrewMonthDays(year, mon);
+  }
+  return jd;
+}
+function hebrewYearDays(year){ return hebrewToJd(year+1, 7, 1) - hebrewToJd(year, 7, 1); }
+function jdToHebrew(jd){
+  jd = Math.floor(jd) + 0.5;
+  const count = Math.floor((jd - HEB_EPOCH)*98496/35975351);
+  let year = count - 1;
+  for(let i = count; jd >= hebrewToJd(i, 7, 1); i++) year++;
+  const first = (jd < hebrewToJd(year, 1, 1)) ? 7 : 1;
+  let month = first;
+  for(let i = first; jd > hebrewToJd(year, i, hebrewMonthDays(year, i)); i++) month++;
+  const day = jd - hebrewToJd(year, month, 1) + 1;
+  return [year, month, day];
+}
+function easter(y){
+  const a = y % 19, b = Math.floor(y/100), c = y % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b - f + 1)/3), h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c/4), k = c % 4, l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l)/451);
+  const month = Math.floor((h + l - 7*m + 114)/31);
+  const day = ((h + l - 7*m + 114) % 31) + 1;
+  return {y, m: month, d: day};
+}
+
+/* ---------- Feestdagen ---------- */
+function nlFeestdagenJaar(y){
+  const E = easter(y);
+  const eJd = Date.UTC(E.y, E.m - 1, E.d);
+  const dag = ms => { const dt = new Date(ms); return iso(dt.getUTCFullYear(), dt.getUTCMonth()+1, dt.getUTCDate()); };
+  const lijst = [];
+  lijst.push({iso: iso(y, 1, 1), naam: 'Nieuwjaarsdag'});
+  lijst.push({iso: dag(eJd - 2*86400000), naam: 'Goede Vrijdag'});
+  lijst.push({iso: dag(eJd), naam: 'Eerste Paasdag'});
+  lijst.push({iso: dag(eJd + 86400000), naam: 'Tweede Paasdag'});
+  const k27 = new Date(Date.UTC(y, 3, 27));
+  lijst.push({iso: dag(k27.getUTCDay() === 0 ? Date.UTC(y, 3, 26) : k27.getTime()), naam: 'Koningsdag'});
+  lijst.push({iso: iso(y, 5, 5), naam: 'Bevrijdingsdag'});
+  lijst.push({iso: dag(eJd + 39*86400000), naam: 'Hemelvaartsdag'});
+  lijst.push({iso: dag(eJd + 49*86400000), naam: 'Eerste Pinksterdag'});
+  lijst.push({iso: dag(eJd + 50*86400000), naam: 'Tweede Pinksterdag'});
+  lijst.push({iso: iso(y, 12, 25), naam: 'Eerste Kerstdag'});
+  lijst.push({iso: iso(y, 12, 26), naam: 'Tweede Kerstdag'});
+  return lijst;
+}
+function joodseFeestdag(hy, hm, hd){
+  if(hm === 7){
+    if(hd === 1 || hd === 2) return 'Rosh Hasjana';
+    if(hd === 10) return 'Jom Kipoer';
+    if(hd >= 15 && hd <= 21) return 'Soekot';
+    if(hd === 22) return 'Sjemini Atseret';
+    if(hd === 23) return 'Simchat Tora';
+  }
+  if(hm === 1 && hd >= 15 && hd <= 22) return 'Pesach';
+  if(hm === 3 && (hd === 6 || hd === 7)) return 'Sjav\'oeot';
+  const adar = hebrewLeap(hy) ? 13 : 12;
+  if(hm === adar && hd === 14) return 'Poerim';
+  if((hm === 9 && hd >= 25) || (hm === 10 && hd <= 3)) return 'Chanoeka';
+  if(hm === 5 && hd === 9) return 'Tisja BeAv';
+  if(hm === 2 && hd === 18) return 'Lag Baomer';
+  return '';
+}
+function feestdagOpDatum(datumIso){
+  const parts = datumIso.split('-').map(Number);
+  if(parts.length !== 3 || !parts[0]) return '';
+  const [y, m, d] = parts;
+  const namen = [];
+  if(state.settings.nlFeestdagen){
+    const hit = nlFeestdagenJaar(y).find(f => f.iso === datumIso);
+    if(hit) namen.push(hit.naam);
+  }
+  if(state.settings.joodsFeestdagen){
+    const h = jdToHebrew(gregorianToJd(y, m, d));
+    const jn = joodseFeestdag(h[0], h[1], h[2]);
+    if(jn) namen.push(jn);
+  }
+  return namen.join(' + ');
+}
+
+/* ---------- Schoolvakanties (rijksoverheid.nl) ---------- */
+const MAANDEN_NL = {
+  januari:1, februari:2, maart:3, april:4, mei:5, juni:6, juli:7,
+  augustus:8, september:9, oktober:10, november:11, december:12,
+  jan:1, feb:2, mrt:3, apr:4, jun:6, jul:7, aug:8, sep:9, okt:10, nov:11, dec:12
+};
+function schooljaarVanDatum(datumIso){
+  const [y, m] = datumIso.split('-').map(Number);
+  return m >= 8 ? y + '-' + (y + 1) : (y - 1) + '-' + y;
+}
+function urlVoorSchooljaar(sj){ return RO_BASE + sj; }
+function stripTags(s){ return s.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' '); }
+function parseDatumReeks(tekst){
+  const m = tekst.match(/(\d{1,2})\s+([a-zà-ÿ]+)\s*(\d{4})?\s*t\/m\s*(\d{1,2})\s+([a-zà-ÿ]+)\s+(\d{4})/i);
+  if(!m) return null;
+  const d1 = +m[1], ma1 = MAANDEN_NL[m[2].toLowerCase()];
+  const d2 = +m[4], ma2 = MAANDEN_NL[m[5].toLowerCase()], y2 = +m[6];
+  if(!ma1 || !ma2) return null;
+  const y1 = m[3] ? +m[3] : y2;
+  return [iso(y1, ma1, d1), iso(y2, ma2, d2)];
+}
+function parseOverzichtHTML(html){
+  const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+  for(const t of tables){
+    if(!/Regio\s+Noord/i.test(t)) continue;
+    const headerCells = [...t.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => stripTags(m[1]).replace(/\s+/g, ' ').trim());
+    const colIdx = {};
+    headerCells.forEach((h, i) => {
+      const hl = h.toLowerCase();
+      if(hl.indexOf('noord') !== -1) colIdx.noord = i;
+      else if(hl.indexOf('midden') !== -1 || hl.indexOf('centraal') !== -1) colIdx.midden = i;
+      else if(hl.indexOf('zuid') !== -1) colIdx.zuid = i;
+    });
+    if(colIdx.noord === undefined) continue;
+    const rows = [...t.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(m => m[1]);
+    const result = {noord: [], midden: [], zuid: []};
+    let ri = -1;
+    for(const rowHtml of rows){
+      const cells = [...rowHtml.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)]
+        .map(m => stripTags(m[1]).replace(/\s+/g, ' ').trim());
+      if(cells.length < 2) continue;
+      if(/regio/i.test(cells.join(' '))) continue;
+      let name = cells[0] || VAKANTIE_NAMEN[ri] || ('Vakantie ' + (ri + 1));
+      ri++;
+      ['noord','midden','zuid'].forEach(regio => {
+        const ci = colIdx[regio];
+        if(ci === undefined || ci >= cells.length) return;
+        const range = parseDatumReeks(cells[ci]);
+        if(range) result[regio].push({name, start: range[0], end: range[1]});
+      });
+    }
+    if(result.noord.length || result.midden.length || result.zuid.length) return result;
+  }
+  return null;
+}
+function leesVakantieCache(){
+  try{
+    const raw = localStorage.getItem(VAK_CACHE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {};
+}
+function schrijfVakantieCache(c){
+  try{ localStorage.setItem(VAK_CACHE_KEY, JSON.stringify(c)); }catch(e){}
+}
+async function laadVakanties(sj, force){
+  const cache = leesVakantieCache();
+  const now = Date.now();
+  if(!force && cache[sj] && now - cache[sj].fetchedAt < 7*24*3600*1000){
+    return {data: cache[sj].data, bron: 'cache', fetchedAt: cache[sj].fetchedAt};
+  }
+  try{
+    const res = await fetch(urlVoorSchooljaar(sj), {cache: 'no-store'});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const html = await res.text();
+    const data = parseOverzichtHTML(html);
+    if(!data) throw new Error('geen vacantietabel gevonden op de pagina');
+    cache[sj] = {fetchedAt: now, data};
+    schrijfVakantieCache(cache);
+    return {data, bron: 'live', fetchedAt: now};
+  }catch(e){
+    if(cache[sj]) return {data: cache[sj].data, bron: 'cache', fetchedAt: cache[sj].fetchedAt};
+    if(INGEBAKKEN_VAKANTIES[sj]) return {data: INGEBAKKEN_VAKANTIES[sj], bron: 'ingebakken', fetchedAt: null};
+    return {data: null, bron: 'leeg', fout: String(e)};
+  }
+}
+async function vakantieOpDatum(datumIso, regio){
+  const sj = schooljaarVanDatum(datumIso);
+  const r = await laadVakanties(sj, false);
+  if(!r.data) return {naam: '', bron: r.bron, schooljaar: sj};
+  const lijst = r.data[regio] || [];
+  const hit = lijst.find(v => v.start <= datumIso && datumIso <= v.end);
+  return {naam: hit ? hit.name : '', bron: r.bron, schooljaar: sj, fetchedAt: r.fetchedAt};
+}
+
+/* ---------- Auto-invullen bij datum ---------- */
+async function autoVulDatum(target){
+  const datum = target.datum;
+  if(!datum) return;
+  const feestdag = feestdagOpDatum(datum);
+  let vakantie = {naam: '', bron: 'leeg'};
+  try{
+    vakantie = await vakantieOpDatum(datum, state.settings.regio);
+  }catch(e){}
+  let obj = null;
+  if(target.type === 'slot'){
+    obj = state.slots.find(s => s.id === target.id);
+    if(obj){ obj.feestdag = feestdag; obj.vakantie = vakantie.naam; }
+  }else if(target.type === 'parked'){
+    obj = state.parked.find(p => p.id === target.id);
+    if(obj){ obj.feestdag = feestdag; obj.vakantie = vakantie.naam; }
+  }
+  save();
+  const tafel = target.type === 'slot' ? document.getElementById('tafel') : document.getElementById('parkTafel');
+  const attr = target.type === 'slot' ? 'data-slot' : 'data-parked';
+  const row = tafel.querySelector('tr[' + attr + '="' + target.id + '"]');
+  if(row){
+    const fEl = target.type === 'slot' ? row.querySelector('[data-opzet="feestdag"]') : row.querySelector('[data-field="feestdag"]');
+    const vEl = target.type === 'slot' ? row.querySelector('[data-opzet="vakantie"]') : row.querySelector('[data-field="vakantie"]');
+    if(fEl && fEl.value !== feestdag) fEl.value = feestdag;
+    if(vEl && vEl.value !== vakantie.naam) vEl.value = vakantie.naam;
+  }
+  updateVakantieStatus();
+}
+function autoVulAlles(){
+  state.slots.forEach(s => { if(s.datum) autoVulDatum({type: 'slot', id: s.id, datum: s.datum}); });
+  state.parked.forEach(p => { if(p.datum) autoVulDatum({type: 'parked', id: p.id, datum: p.datum}); });
+}
+function updateVakantieStatus(){
+  const el = document.getElementById('vakantieStatus');
+  if(!el) return;
+  const nu = new Date();
+  const sj = schooljaarVanDatum(iso(nu.getFullYear(), nu.getMonth()+1, nu.getDate()));
+  const cache = leesVakantieCache();
+  const c = cache[sj];
+  if(c){
+    el.textContent = 'Schooljaar ' + sj + ' gecachet op ' + new Date(c.fetchedAt).toLocaleString('nl-BE') + ' (' + (c.data.midden ? c.data.midden.length : 0) + ' vakanties, regio ' + state.settings.regio + ').';
+  }else if(INGEBAKKEN_VAKANTIES[sj]){
+    el.textContent = 'Schooljaar ' + sj + ': live ophalen niet gelukt, ingebouwde kopie wordt gebruikt.';
+  }else{
+    el.textContent = 'Nog geen gegevens voor schooljaar ' + sj + '.';
+  }
+}
+
+/* ---------- Rendering ---------- */
 function inputFor(value, col, ownerAttr, ownerId){
   if(col.type === 'select'){
     const opts = state.options[col.key] || [];
@@ -234,8 +621,8 @@ function renderTable(){
     state.slots.forEach(s => {
       body += '<tr data-slot="' + s.id + '">';
       body += '<td class="datum"><input type="date" data-slot="' + s.id + '" data-opzet="datum" value="' + esc(s.datum) + '"></td>';
-      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="feestdag" value="' + esc(s.feestdag) + '" placeholder="Feestdag"></td>';
-      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="vakantie" value="' + esc(s.vakantie) + '" placeholder="Vakantie"></td>';
+      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="feestdag" value="' + esc(s.feestdag) + '" placeholder="Feestdag (auto)"></td>';
+      body += '<td><input type="text" data-slot="' + s.id + '" data-opzet="vakantie" value="' + esc(s.vakantie) + '" placeholder="Vakantie (auto)"></td>';
       body += '<td><button class="verwijd" data-slot="' + s.id + '" title="Verwijder deze datum">🗑</button></td>';
       body += '</tr>';
     });
@@ -248,19 +635,22 @@ function renderTable(){
 }
 function renderParked(){
   const parkTafel = document.getElementById('parkTafel');
-  let head = '<thead><tr><th class="handle">⠿</th>';
+  let head = '<thead><tr><th class="handle">⠿</th><th>Datum</th><th>Feestdag</th><th>Vakantie</th>';
   PLAN_COLS.forEach(c => { head += '<th>' + esc(c.label) + '</th>'; });
   head += '<th></th></tr></thead>';
   let body = '<tbody>';
   state.parked.forEach(p => {
     body += '<tr draggable="true" data-parked="' + p.id + '">';
-    body += '<td class="handle" title="Sleep terug op een datum om in te plannen">⠿</td>';
+    body += '<td class="handle" title="Sleep op een datum om in te plannen">⠿</td>';
+    body += '<td class="datum"><input type="date" data-parked="' + p.id + '" data-parked-datum="1" value="' + esc(p.datum) + '"></td>';
+    body += '<td><input type="text" data-parked="' + p.id + '" data-field="feestdag" value="' + esc(p.feestdag) + '" placeholder="Feestdag (auto)"></td>';
+    body += '<td><input type="text" data-parked="' + p.id + '" data-field="vakantie" value="' + esc(p.vakantie) + '" placeholder="Vakantie (auto)"></td>';
     PLAN_COLS.forEach(c => { body += '<td>' + inputFor(p[c.key], c, 'data-parked', p.id) + '</td>'; });
     body += '<td><button class="verwijd" data-parked="' + p.id + '" title="Definitief verwijderen">🗑</button></td>';
     body += '</tr>';
   });
   if(!state.parked.length){
-    body += '<tr><td colspan="10" class="hint">Leeg — sleep hier rijen naartoe die (nog) niet doorgaan.</td></tr>';
+    body += '<tr><td colspan="13" class="hint">Leeg — klik op "➕ Nieuwe regel" om een evenement toe te voegen, of sleep hier een rij naartoe.</td></tr>';
   }
   body += '</tbody>';
   parkTafel.innerHTML = head + body;
@@ -282,6 +672,12 @@ function renderOptions(){
   });
   wrap.innerHTML = html;
 }
+function renderSettings(){
+  document.getElementById('regioSelect').value = state.settings.regio;
+  document.getElementById('chkNl').checked = !!state.settings.nlFeestdagen;
+  document.getElementById('chkJoods').checked = !!state.settings.joodsFeestdagen;
+  updateVakantieStatus();
+}
 function render(){
   const planning = state.mode === 'planning';
   document.getElementById('modeBtn').textContent = planning
@@ -289,11 +685,13 @@ function render(){
     : '📋 Terug naar planning';
   document.getElementById('hint').textContent = planning
     ? 'Sleep een rij (⠿) naar een andere datum om de planning te verplaatsen; Datum, Feestdag en Vakantie blijven staan. Sleep een rij naar de parkeerplaats onderaan om ze daar neer te zetten.'
-    : 'Definieer hier eerst de lege tabel: voeg datums toe en vul feestdag en vakantie in. Daarna schakelt u terug naar de planning om te puzzelen.';
+    : 'Definieer hier eerst de lege tabel: voeg datums toe — Feestdag en Vakantie worden automatisch opgezocht — en vul ze naar wens aan. Daarna schakelt u terug naar de planning om te puzzelen.';
   document.querySelectorAll('.opzet-only').forEach(b => b.classList.toggle('verborgen', planning));
   renderTable();
   renderParked();
 }
+
+/* ---------- Verplaatsen / parkeren ---------- */
 function handleDropOnSlot(payload, targetSlot){
   if(payload.kind === 'slot'){
     if(payload.id === targetSlot) return;
@@ -306,8 +704,16 @@ function handleDropOnSlot(payload, targetSlot){
     if(idx === -1) return;
     const moving = state.parked.splice(idx, 1)[0];
     const current = state.plan[targetSlot] || emptyEntry();
+    const target = state.slots.find(s => s.id === targetSlot);
     state.plan[targetSlot] = Object.assign(emptyEntry(), moving);
     delete state.plan[targetSlot].id;
+    delete state.plan[targetSlot].datum;
+    delete state.plan[targetSlot].feestdag;
+    delete state.plan[targetSlot].vakantie;
+    if(target && moving.datum === target.datum){
+      if(moving.feestdag) target.feestdag = moving.feestdag;
+      if(moving.vakantie) target.vakantie = moving.vakantie;
+    }
     if(!isEmptyEntry(current)){
       const back = Object.assign(emptyEntry(), current);
       back.id = uid();
@@ -324,6 +730,8 @@ function readPayload(e){
   }catch(err){}
   return dragPayload;
 }
+
+/* ---------- Init & events ---------- */
 function init(){
   load();
   const tafel = document.getElementById('tafel');
@@ -336,9 +744,11 @@ function init(){
   });
   document.getElementById('addSlotBtn').addEventListener('click', () => {
     const nu = new Date();
-    const iso = nu.getFullYear() + '-' + String(nu.getMonth() + 1).padStart(2, '0') + '-' + String(nu.getDate()).padStart(2, '0');
-    state.slots.push(emptySlot(iso));
+    const vandaag = iso(nu.getFullYear(), nu.getMonth() + 1, nu.getDate());
+    const s = emptySlot(vandaag);
+    state.slots.push(s);
     save(); render();
+    autoVulDatum({type: 'slot', id: s.id, datum: vandaag});
   });
   document.getElementById('sortBtn').addEventListener('click', () => {
     state.slots.sort((a,b) => String(a.datum).localeCompare(String(b.datum)));
@@ -384,17 +794,72 @@ function init(){
     if(again) again.focus();
   });
 
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    renderSettings();
+    document.getElementById('settingsModal').classList.remove('hidden');
+  });
+  document.getElementById('sluitSettings').addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.add('hidden');
+  });
+  document.getElementById('settingsModal').addEventListener('click', e => {
+    if(e.target.id === 'settingsModal') e.target.classList.add('hidden');
+  });
+  document.getElementById('regioSelect').addEventListener('change', e => {
+    state.settings.regio = e.target.value;
+    save(); updateVakantieStatus(); autoVulAlles();
+  });
+  document.getElementById('chkNl').addEventListener('change', e => {
+    state.settings.nlFeestdagen = e.target.checked;
+    save(); autoVulAlles();
+  });
+  document.getElementById('chkJoods').addEventListener('change', e => {
+    state.settings.joodsFeestdagen = e.target.checked;
+    save(); autoVulAlles();
+  });
+  document.getElementById('fetchVakantiesBtn').addEventListener('click', async () => {
+    const el = document.getElementById('vakantieStatus');
+    const nu = new Date();
+    const sjNu = schooljaarVanDatum(iso(nu.getFullYear(), nu.getMonth()+1, nu.getDate()));
+    const [a, b] = sjNu.split('-').map(Number);
+    const sjVolgend = a + 1 + '-' + (b + 1);
+    el.textContent = 'Bezig met ophalen van rijksoverheid.nl…';
+    const r1 = await laadVakanties(sjNu, true);
+    const r2 = await laadVakanties(sjVolgend, true);
+    el.textContent = 'Schooljaar ' + sjNu + ': ' + (r1.bron === 'live' ? 'live opgehaald van rijksoverheid.nl' : r1.bron === 'cache' ? 'uit cache' : 'ingebakken kopie (live ophalen mislukt: ' + (r1.fout || 'onbekend') + ')')
+      + ' · ' + sjVolgend + ': ' + (r2.bron === 'live' ? 'live opgehaald' : r2.bron === 'cache' ? 'uit cache' : 'ingebakken/onbekend')
+      + ' — ' + new Date().toLocaleString('nl-BE') + '.';
+    autoVulAlles();
+  });
+
+  document.getElementById('addParkedBtn').addEventListener('click', () => {
+    const p = emptyParked();
+    state.parked.push(p);
+    save(); render();
+    const row = parkTafel.querySelector('tr[data-parked="' + p.id + '"] input[data-parked-datum]');
+    if(row) row.focus();
+  });
+
   tafel.addEventListener('input', e => {
     const el = e.target;
     const slot = el.dataset.slot;
     if(!slot) return;
     if(el.dataset.opzet){
       const s = state.slots.find(x => x.id === slot);
-      if(s){ s[el.dataset.opzet] = el.value; save(); }
+      if(s){
+        s[el.dataset.opzet] = el.value;
+        save();
+        if(el.dataset.opzet === 'datum' && el.value) autoVulDatum({type: 'slot', id: slot, datum: el.value});
+      }
     }else if(el.dataset.field){
       const entry = state.plan[slot] || (state.plan[slot] = emptyEntry());
       entry[el.dataset.field] = el.value;
       save();
+    }
+  });
+  tafel.addEventListener('change', e => {
+    const el = e.target;
+    if(el.dataset && el.dataset.opzet === 'datum' && el.dataset.slot && el.value){
+      autoVulDatum({type: 'slot', id: el.dataset.slot, datum: el.value});
     }
   });
   tafel.addEventListener('click', e => {
@@ -444,9 +909,23 @@ function init(){
   parkTafel.addEventListener('input', e => {
     const el = e.target;
     const id = el.dataset.parked;
-    if(!id || !el.dataset.field) return;
+    if(!id) return;
     const p = state.parked.find(x => x.id === id);
-    if(p){ p[el.dataset.field] = el.value; save(); }
+    if(!p) return;
+    if(el.dataset.parkedDatum !== undefined){
+      p.datum = el.value;
+      save();
+      if(el.value) autoVulDatum({type: 'parked', id, datum: el.value});
+    }else if(el.dataset.field){
+      p[el.dataset.field] = el.value;
+      save();
+    }
+  });
+  parkTafel.addEventListener('change', e => {
+    const el = e.target;
+    if(el.dataset && el.dataset.parkedDatum !== undefined && el.dataset.parked && el.value){
+      autoVulDatum({type: 'parked', id: el.dataset.parked, datum: el.value});
+    }
   });
   parkTafel.addEventListener('click', e => {
     const btn = e.target.closest('button.verwijd[data-parked]');
@@ -483,7 +962,7 @@ function init(){
     if(payload.kind === 'slot'){
       const entry = state.plan[payload.id];
       if(entry && !isEmptyEntry(entry)){
-        const parked = Object.assign(emptyEntry(), entry);
+        const parked = Object.assign(emptyParked(), entry);
         parked.id = uid();
         state.parked.push(parked);
         state.plan[payload.id] = emptyEntry();
