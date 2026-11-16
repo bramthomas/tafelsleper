@@ -37,6 +37,10 @@ een datum om ze in te plannen (heeft de geparkeerde rij dezelfde datum, dan word
 en Vakantie meegenomen; een eventuele bestaande planning op die datum verhuist naar de
 parkeerplaats). Met 🗑 verwijdert u een geparkeerde rij definitief.
 
+Sleep een geparkeerde rij naar de **stippelzone onderaan de tafel** (⬇) om ze daar als
+**nieuwe regel onderaan toe te voegen** — met de datum, Feestdag en Vakantie van de
+geparkeerde rij, zonder een bestaande rij te verdringen.
+
 ### 4. Automatisch opzoeken van feestdag en vakantie
 Bij elke ingevoerde datum (in de opzetmodus én in de parkeerplaats) zoekt het systeem op:
 

@@ -102,6 +102,14 @@ function check(label, got, exp){
   await sandbox.autoVulDatum({type: 'slot', id: 's2', datum: '2026-09-21'});
   check('autoVul slot s2: feestdag', vm.runInContext("state.slots.find(s => s.id === 's2').feestdag", sandbox), 'Jom Kipoer');
 
+  vm.runInContext("state.parked.push({id:'p9', datum:'2026-11-20', feestdag:'', vakantie:'', arbeid:'Nieuw ding'});", sandbox);
+  sandbox.handleAppendDrop({kind: 'parked', id: 'p9'});
+  check('append: aantal slots', vm.runInContext('state.slots.length', sandbox), 5);
+  check('append: datum nieuwe regel', vm.runInContext('state.slots[state.slots.length-1].datum', sandbox), '2026-11-20');
+  check('append: planning nieuwe regel', vm.runInContext('state.plan[state.slots[state.slots.length-1].id].arbeid', sandbox), 'Nieuw ding');
+  check('append: uit parkeerplaats', vm.runInContext("state.parked.find(p => p.id === 'p9') === undefined", sandbox), true);
+  check('append: geen bestaande rij verdrongen', vm.runInContext('state.plan.s4.arbeid', sandbox), 'Bevordering Bijker');
+
   if(failures){
     console.error(failures + ' check(s) gefaald');
     process.exit(1);
