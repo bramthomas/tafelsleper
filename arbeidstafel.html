@@ -84,7 +84,7 @@
   }
   .instelling{display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem;}
   .instelling label{min-width:14rem; font-weight:600;}
-  .instelling select, .instelling input[type="text"]{
+  .instelling select, .instelling input[type="text"], .instelling input[type="date"]{
     font:inherit; border:1px solid var(--rand); border-radius:6px; padding:.3rem .5rem;
   }
   #vakantieStatus{color:var(--zacht); font-size:.85rem; margin:.4rem 0;}
@@ -97,6 +97,7 @@
   <div class="werkbalk">
     <button id="modeBtn" class="primair"></button>
     <button id="addSlotBtn" class="opzet-only verborgen">➕ Datum toevoegen</button>
+    <button id="reeksBtn" class="opzet-only verborgen">🗓️ Datums in reeks aanmaken</button>
     <button id="sortBtn" class="opzet-only verborgen">⬍ Sorteer op datum</button>
     <button id="optionsBtn">⚙ Opties beheren</button>
     <button id="settingsBtn">🛠 Instellingen</button>
@@ -126,6 +127,45 @@
     <p class="hint">Beheer hier de lijsten waaruit u in de kolommen Graad, MV, Status, Voorhof en WP kunt kiezen.</p>
     <div id="optionsLijsten"></div>
     <button id="sluitOptions">Sluiten</button>
+  </div>
+</div>
+<div id="reeksModal" class="modal hidden">
+  <div class="modal-inhoud">
+    <h2>Datums in reeks aanmaken</h2>
+    <p class="hint">Maak in één keer een reeks lege arbeidsdagen aan, bijvoorbeeld voor het hele werkjaar. Bestaande datums blijven ongemoeid.</p>
+    <div class="instelling">
+      <label for="reeksStart">Eerste dag van de periode</label>
+      <input type="date" id="reeksStart">
+    </div>
+    <div class="instelling">
+      <label for="reeksEind">Laatste dag van de periode</label>
+      <input type="date" id="reeksEind">
+    </div>
+    <div class="instelling">
+      <label for="reeksInterval">Interval</label>
+      <select id="reeksInterval">
+        <option value="1" selected>Wekelijks (elke week)</option>
+        <option value="2">Om de 2 weken</option>
+        <option value="3">Om de 3 weken</option>
+        <option value="4">Om de 4 weken</option>
+      </select>
+    </div>
+    <div class="instelling">
+      <label for="reeksWeekday">Standaard bijeenkomst op</label>
+      <select id="reeksWeekday">
+        <option value="1" selected>Maandag</option>
+        <option value="2">Dinsdag</option>
+        <option value="3">Woensdag</option>
+        <option value="4">Donderdag</option>
+        <option value="5">Vrijdag</option>
+        <option value="6">Zaterdag</option>
+        <option value="0">Zondag</option>
+      </select>
+    </div>
+    <p id="reeksPreview" class="hint"></p>
+    <p id="reeksFout" class="hint" style="color:#b00020"></p>
+    <button id="reeksGenereerBtn" class="primair">Datums aanmaken</button>
+    <button id="sluitReeks">Sluiten</button>
   </div>
 </div>
 <div id="settingsModal" class="modal hidden">
@@ -634,6 +674,53 @@ function updateVakantieStatus(){
   }
 }
 
+/* ---------- Datums in reeks aanmaken ---------- */
+function genereerDatumreeks(startIso, eindIso, intervalWeken, weekday){
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if(!re.test(startIso || '') || !re.test(eindIso || '') || startIso > eindIso) return [];
+  const n = parseInt(intervalWeken, 10);
+  const wd = parseInt(weekday, 10);
+  if(!Number.isInteger(n) || n < 1 || !Number.isInteger(wd) || wd < 0 || wd > 6) return [];
+  const ms = s => { const a = s.split('-').map(Number); return Date.UTC(a[0], a[1] - 1, a[2]); };
+  const startMs = ms(startIso), eindMs = ms(eindIso);
+  const eerste = startMs + ((wd - new Date(startMs).getUTCDay() + 7) % 7) * 86400000;
+  const uit = [];
+  for(let t = eerste; t <= eindMs; t += n * 7 * 86400000){
+    const d = new Date(t);
+    uit.push(iso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()));
+  }
+  return uit;
+}
+function voegReeksToe(startIso, eindIso, intervalWeken, weekday){
+  const datums = genereerDatumreeks(startIso, eindIso, intervalWeken, weekday);
+  const aanwezig = new Set(state.slots.map(s => s.datum));
+  const nieuw = [];
+  datums.forEach(d => {
+    if(aanwezig.has(d)) return;
+    const s = emptySlot(d);
+    state.slots.push(s);
+    state.plan[s.id] = emptyEntry();
+    aanwezig.add(d);
+    nieuw.push(s);
+  });
+  state.slots.sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
+  save();
+  return {datums: datums, nieuw: nieuw};
+}
+function updateReeksPreview(){
+  const preview = document.getElementById('reeksPreview');
+  if(!preview) return;
+  const start = document.getElementById('reeksStart').value;
+  const eind = document.getElementById('reeksEind').value;
+  if(!start || !eind){ preview.textContent = ''; return; }
+  const datums = genereerDatumreeks(start, eind, document.getElementById('reeksInterval').value, document.getElementById('reeksWeekday').value);
+  if(!datums.length){ preview.textContent = 'Geen datums op de gekozen dag binnen deze periode.'; return; }
+  const aanwezig = new Set(state.slots.map(s => s.datum));
+  const nieuw = datums.filter(d => !aanwezig.has(d)).length;
+  preview.textContent = 'Dit maakt ' + nieuw + ' lege datumregel(s) aan, van ' + fmtDatum(datums[0]) + ' t/m ' + fmtDatum(datums[datums.length - 1]) + '.'
+    + (datums.length - nieuw ? ' ' + (datums.length - nieuw) + ' datum(s) bestaat al en wordt overgeslagen.' : '');
+}
+
 /* ---------- Rendering ---------- */
 function inputFor(value, col, ownerAttr, ownerId){
   if(col.type === 'select'){
@@ -844,6 +931,54 @@ function init(){
   document.getElementById('sortBtn').addEventListener('click', () => {
     state.slots.sort((a,b) => String(a.datum).localeCompare(String(b.datum)));
     save(); render();
+  });
+  const reeksModal = document.getElementById('reeksModal');
+  document.getElementById('reeksBtn').addEventListener('click', () => {
+    const startEl = document.getElementById('reeksStart');
+    if(!startEl.value){
+      const nu = new Date();
+      startEl.value = iso(nu.getFullYear(), nu.getMonth() + 1, nu.getDate());
+    }
+    updateReeksPreview();
+    reeksModal.classList.remove('hidden');
+  });
+  document.getElementById('sluitReeks').addEventListener('click', () => {
+    reeksModal.classList.add('hidden');
+  });
+  reeksModal.addEventListener('click', e => {
+    if(e.target.id === 'reeksModal') reeksModal.classList.add('hidden');
+  });
+  ['reeksStart', 'reeksEind', 'reeksInterval', 'reeksWeekday'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', updateReeksPreview);
+    el.addEventListener('change', updateReeksPreview);
+  });
+  document.getElementById('reeksGenereerBtn').addEventListener('click', () => {
+    const start = document.getElementById('reeksStart').value;
+    const eind = document.getElementById('reeksEind').value;
+    const interval = document.getElementById('reeksInterval').value;
+    const weekday = document.getElementById('reeksWeekday').value;
+    const fout = document.getElementById('reeksFout');
+    if(!start || !eind){
+      fout.textContent = 'Kies eerst een eerste en een laatste dag.';
+      return;
+    }
+    if(start > eind){
+      fout.textContent = 'De laatste dag ligt vóór de eerste dag.';
+      return;
+    }
+    const datums = genereerDatumreeks(start, eind, interval, weekday);
+    if(!datums.length){
+      fout.textContent = 'Geen datums op de gekozen dag binnen deze periode.';
+      return;
+    }
+    fout.textContent = '';
+    const r = voegReeksToe(start, eind, interval, weekday);
+    reeksModal.classList.add('hidden');
+    render();
+    r.nieuw.forEach(s => autoVulDatum({type: 'slot', id: s.id, datum: s.datum}));
+    const overgeslagen = r.datums.length - r.nieuw.length;
+    alert(r.nieuw.length + ' lege datumregel(s) aangemaakt' + (overgeslagen ? ', ' + overgeslagen + ' overgeslagen (bestond al)' : '') + '. Feestdag en vakantie worden automatisch opgezocht.');
   });
   document.getElementById('sampleBtn').addEventListener('click', () => {
     if(confirm('Huidige tafel vervangen door de voorbeelddata?')){

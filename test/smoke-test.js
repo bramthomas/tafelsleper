@@ -140,6 +140,30 @@ function check(label, got, exp){
   check('loadFromServer: remote state', remote && remote.settings && remote.settings.regio, 'zuid');
   check('loadFromServer: migratie (feestdag aangevuld)', remote && remote.parked[0].feestdag, '');
 
+  check('reeks: wekelijks maandag sept 2026', sandbox.genereerDatumreeks('2026-09-01', '2026-09-30', 1, 1), ['2026-09-07','2026-09-14','2026-09-21','2026-09-28']);
+  check('reeks: start valt op maandag', sandbox.genereerDatumreeks('2026-09-07', '2026-09-21', 1, 1), ['2026-09-07','2026-09-14','2026-09-21']);
+  check('reeks: om de 2 weken', sandbox.genereerDatumreeks('2026-09-07', '2026-10-31', 2, 1), ['2026-09-07','2026-09-21','2026-10-05','2026-10-19']);
+  check('reeks: woensdagen sept 2026', sandbox.genereerDatumreeks('2026-09-01', '2026-09-30', 1, 3), ['2026-09-02','2026-09-09','2026-09-16','2026-09-23','2026-09-30']);
+  check('reeks: zondagen jan 2026', sandbox.genereerDatumreeks('2026-01-01', '2026-01-31', 1, 0), ['2026-01-04','2026-01-11','2026-01-18','2026-01-25']);
+  check('reeks: eind vóór eerste gekozen dag', sandbox.genereerDatumreeks('2026-09-01', '2026-09-05', 1, 1), []);
+  check('reeks: eind vóór start', sandbox.genereerDatumreeks('2026-09-30', '2026-09-01', 1, 1), []);
+  check('reeks: lege start', sandbox.genereerDatumreeks('', '2026-09-30', 1, 1), []);
+  check('reeks: ongeldig interval', sandbox.genereerDatumreeks('2026-09-01', '2026-09-30', 0, 1), []);
+
+  vm.runInContext('state = sampleState();', sandbox);
+  const r1 = sandbox.voegReeksToe('2026-01-01', '2026-01-31', 1, 0);
+  check('reeks toevoegen: jan 2026 (zondagen) bestaat al', r1.nieuw.length, 0);
+  check('reeks toevoegen: reeks bevat 4 datums', r1.datums.length, 4);
+  check('reeks toevoegen: aantal slots ongewijzigd', vm.runInContext('state.slots.length', sandbox), 4);
+  const r2 = sandbox.voegReeksToe('2026-02-01', '2026-02-28', 1, 0);
+  check('reeks toevoegen: feb 2026 — 4 nieuwe zondagen', r2.nieuw.length, 4);
+  check('reeks toevoegen: aantal slots nu 8', vm.runInContext('state.slots.length', sandbox), 8);
+  check('reeks toevoegen: lege planning per nieuwe regel', vm.runInContext('isEmptyEntry(state.plan[state.slots[state.slots.length-1].id])', sandbox), true);
+  check('reeks toevoegen: gesorteerd op datum', vm.runInContext('state.slots.map(s => s.datum).join(",")', sandbox), '2026-01-04,2026-01-11,2026-01-18,2026-01-25,2026-02-01,2026-02-08,2026-02-15,2026-02-22');
+  const r3 = sandbox.voegReeksToe('2026-02-01', '2026-02-28', 1, 0);
+  check('reeks toevoegen: herhalen voegt niets toe', r3.nieuw.length, 0);
+  check('reeks toevoegen: nog steeds 8 slots', vm.runInContext('state.slots.length', sandbox), 8);
+
   if(failures){
     console.error(failures + ' check(s) gefaald');
     process.exit(1);

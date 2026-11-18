@@ -12,6 +12,11 @@ Open `arbeidstafel.html` in een browser. Alles wordt automatisch opgeslagen in d
 Klik bovenaan op **🛠 Opzetmodus: datums definiëren**. In deze modus:
 
 - voegt u met **➕ Datum toevoegen** nieuwe datumregels toe;
+- met **🗓️ Datums in reeks aanmaken** maakt u in één keer een hele reeks lege datums aan
+  (handig aan het begin van een werkjaar): kies de **eerste en laatste dag** van de periode,
+  een **interval** (wekelijks, om de 2, 3 of 4 weken) en de **dag van de week** waarop de
+  standaardbijeenkomst valt (standaard **maandag**). Bestaande datums worden niet
+  overschreven; Feestdag en Vakantie worden nadien automatisch opgezocht;
 - vult u per datum **Feestdag** en **Vakantie** in — bij het invoeren of wijzigen van een datum
   worden deze **automatisch opgezocht** en ingevuld (zie onder "Automatisch opzoeken");
 - kunt u datums sorteren (**⬍ Sorteer op datum**) of verwijderen (🗑).
